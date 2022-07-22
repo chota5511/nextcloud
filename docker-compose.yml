@@ -1,0 +1,53 @@
+volumes:
+  nextcloud_app:
+
+services:
+  nextcloud_db:
+    image: postgres
+    restart: always
+    container_name: nextcloud_db
+    environment:
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nextcloud
+      - POSTGRES_DB=nextcloud
+    ports:
+      - 5432:5432
+    volumes:
+      - ./database:/var/lib/postgresql/data
+
+  nextcloud:
+    image: nextcloud:24-fpm
+    restart: always
+    container_name: nextcloud
+    ports:
+      - 9000:9000
+    environment:
+      - POSTGRES_HOST=nextcloud_db
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nextcloud
+      - NEXTCLOUD_ADMIN_USER=administrator
+      - NEXTCLOUD_ADMIN_PASSWORD=nextcloud
+      - NEXTCLOUD_DATA_DIR=/var/www/html/data
+    volumes:
+      - nextcloud_app:/var/www/html
+      - ./data:/var/www/html/data
+    entrypoint: sh -c "apt-get update -y; apt-get install netcat -y; while !(nc -z nextcloud_db 5432); do sleep 1; done; /entrypoint.sh php-fpm"
+    depends_on:
+      - nextcloud_db
+
+  web:
+    image: nginx
+    restart: always
+    container_name: web
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - nextcloud_app:/var/www/html
+      - ./ssl_cert/cert.crt:/etc/ssl/cert.crt
+      - ./ssl_cert/cert.key:/etc/ssl/cert.key
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
+      - ./logs:/var/log/nginx
+    depends_on:
+      - nextcloud
